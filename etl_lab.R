@@ -36,14 +36,78 @@ unique(rtn_despesas$ID_ANO)
 
 saveRDS(rtn_despesas, file = "rtn_despesas.rds")
 
+rtn_despesas_primarias<-
+rtn_despesas %>%
+  dplyr::filter(PRIMARIA_FINANCEIRA %in% c("Primária","Financeira primária"))
+
+
+##Versão sem IPCA
+rtn_dimensional<-
+  rtn_despesas_primarias %>%
+  group_by(ID_ANO, CATEGORIA_RTN,NO_FUNCAO_PT, ORGAO_DESCRICAO, NO_PROGRAMA_PT,NO_ACAO) %>%
+  summarise(
+    total_paga_ano = sum(DESPESAS_PAGAS)
+  ) %>%
+  ungroup()
+
+saveRDS(rtn_dimensional, file = "rtn_dimensional.rds")
+
+##Versão com IPCA
+
+tb_ckan<-resource_show(id="527ccdb1-3059-42f3-bf23-b5e3ab4c6dc6",url="http://www.tesourotransparente.gov.br/ckan")
+
+
+URL_add <- tb_ckan$url
+
+tmp <- tempfile(fileext = ".xlsx")
+
+download.file(URL_add,mode = "wb", destfile = tmp, extra = "-R", method = "libcurl")
+
+names_deflator_IPCA <- read_xlsx(tmp,sheet = 3,skip = 4,n_max = 1, col_names = TRUE)
+deflator_IPCA <- read_xlsx(tmp,sheet = 3,skip = 74,n_max = 1, col_names = FALSE)
+
+names(deflator_IPCA) <- names(names_deflator_IPCA)
+
+names(deflator_IPCA)[1]<-"Rubrica"
+series_temporais_analise_IPCA<-gather(deflator_IPCA,Data, Valor,-Rubrica)
+#series_temporais_analise_IPCA$Data<-gsub("X","",series_temporais_analise_IPCA$Data)
+series_temporais_analise_IPCA$Data<-as.Date(as.numeric(series_temporais_analise_IPCA$Data), origin="1899-12-30")
+series_temporais_analise_IPCA$Valor <-as.numeric(series_temporais_analise_IPCA$Valor)
+
+
+rtn_dimensional_ipca<-
+  rtn_despesas_primarias %>%
+  mutate(Data = as.Date(paste(ID_ANO, ID_MES,"01",sep="-")) ) %>%
+  inner_join(series_temporais_analise_IPCA) %>%
+  mutate(valor_deflacionado = DESPESAS_PAGAS * Valor) %>%
+  group_by(ID_ANO, CATEGORIA_RTN,NO_FUNCAO_PT, ORGAO_DESCRICAO, NO_PROGRAMA_PT,NO_ACAO) %>%
+  summarise(
+    total_paga_ano = sum(DESPESAS_PAGAS),
+    total_paga_ano_deflacionado = sum(valor_deflacionado)
+  ) %>%
+  ungroup()
+
+
+saveRDS(rtn_dimensional_ipca, file = "rtn_dimensional_ipca.rds")
+
+
+rtn_dimensional %>%
+  filter(NO_FUNCAO_PT %in% "EDUCACAO",
+        ID_ANO<max(rtn_despesas$ID_ANO))
+
+saveRDS(rtn_despesas_primarias, file = "rtn_despesas_primarias.rds")
+
+
 unique(rtn_despesas$PRIMARIA_FINANCEIRA)
 
 unique
 
 glimpse(rtn_despesas)
 
+
+graph<-
 rtn_despesas %>%
-  filter(PRIMARIA_FINANCEIRA %in% c("Primária","Financeira primária"),
+  dplyr::filter(PRIMARIA_FINANCEIRA %in% c("Primária","Financeira primária"),
          CATEGORIA_RTN %in% c("II.2.1 - Pessoal e Encargos Sociais - Ativo civil"),
          ID_ANO<2022) %>%
   group_by(ID_ANO,NO_FUNCAO_PT, CATEGORIA_RTN) %>%
@@ -60,6 +124,8 @@ rtn_despesas %>%
     panel.grid = element_blank()
   )+
   facet_wrap(NO_FUNCAO_PT~., scales = "free_y")
+
+print(graph$data)
 
 rtn_despesas %>%
   filter(PRIMARIA_FINANCEIRA %in% c("Primária","Financeira primária"),

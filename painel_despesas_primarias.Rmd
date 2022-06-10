@@ -1,0 +1,416 @@
+---
+title: "Painel de despesas primárias"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+resource_files:
+- rtn_despesas.rds
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(colorspace)
+library(ckanr)
+library(readxl)
+library(tidyr)
+library(plotly)
+library(stringr)
+
+rtn_despesas <- readRDS("rtn_dimensional_ipca.rds")
+
+
+rtn_despesas<-
+  rtn_despesas %>%
+    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"II\\.","2\\.")) %>% 
+    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"I\\.","1\\.")) %>% 
+    mutate(CATEGORIA_RTN= stringr::str_squish ( stringr::str_remove_all(CATEGORIA_RTN,"[:punct:]|[0-9]|[:symbol:]")))
+
+selecionaValor <- function(tipo_valor_historico){
+  
+  if (tipo_valor_historico){
+    var_valor<- "total_paga_ano"
+  } else{
+    var_valor<- "total_paga_ano_deflacionado"
+  }
+
+  var_valor
+}
+
+rankingTotal<- function(.data,by,n=10){
+  
+
+  .data %>%
+    inner_join(
+      .data %>%
+        group_by(!!sym(by)) %>%
+        summarise(
+          total= sum(total_paga_ano)
+        ) %>%   
+        slice_max(order_by = total, n=n) %>%
+        distinct(!!sym(by))   
+    )   
+}
+
+
+```
+
+# Conta por função
+
+## Inputs {.sidebar data-width="150"}
+
+```{r}
+selectInput(inputId = "conta", label= "Selecione uma conta", choices= unique(rtn_despesas$CATEGORIA_RTN),selected = "Pessoal e Encargos Sociais Ativo civil", multiple = TRUE )
+sliderInput("numero_funcao","Informe o número de funções de maior despesa",1,30,10)
+checkboxInput("valor_historico","Usar valor historico")
+checkboxInput("freeScale","Usar escala livre")
+
+```
+
+## Column {data-width = 400}
+
+### Evolução anual para todas funções de acordo com uma conta selecionada (valores em R\$mi)
+
+```{r}
+
+renderPlotly({
+  
+  var_valor<- selecionaValor(input$valor_historico)
+  
+  graph<-
+    rtn_despesas %>%
+    filter(CATEGORIA_RTN %in% c(input$conta),
+           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+    rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
+    mutate( ano=ID_ANO,
+            conta = CATEGORIA_RTN,
+            NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
+    group_by(ano,NO_FUNCAO_PT, conta) %>%
+    summarise(
+       despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ))+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#15202B"),
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "right",
+      strip.background = element_rect(fill = "#505050"),
+      strip.text = element_text(color = "white")
+    )+
+    labs(
+      color = "conta"
+    ) 
+  
+  if (input$freeScale){
+    graph<-
+      graph+ facet_wrap(NO_FUNCAO_PT~., scales = "free_y", ncol = 4)
+    
+  } else{
+    graph<-
+      graph+ facet_wrap(NO_FUNCAO_PT~.)
+    
+  }
+  
+  
+  #graph
+  
+  ggplotly(graph, tooltip = c("ano", "despesa", "text"))
+  
+  
+})
+
+```
+
+# Função por Conta
+
+## Inputs {.sidebar data-width="150"}
+
+```{r}
+selectInput(inputId = "funcao", label= "Selecione uma função", choices= unique(rtn_despesas$NO_FUNCAO_PT),selected = "SAUDE", multiple = TRUE )
+sliderInput("numero_conta_funcao","Informe o número de contas de maior despesa",1,30,10)
+checkboxInput("valor_historico_funcao","Usar valor historico")
+checkboxInput("freeScale_funcao","Usar escala livre")
+```
+
+## Column {data-width = 400}
+
+### Evolução anual para todas contas de acordo com uma função selecionada (valores em R\$mi)
+
+```{r}
+
+renderPlotly({
+  
+  
+  var_valor<- selecionaValor(input$valor_historico_funcao)
+
+  
+  graph<-
+    rtn_despesas %>%
+    filter(NO_FUNCAO_PT %in% c(input$funcao),
+           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+    rankingTotal("CATEGORIA_RTN",n=input$numero_conta_funcao) %>%
+    mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
+           funcao = str_wrap(NO_FUNCAO_PT,10),
+           ano = ID_ANO) %>%  
+    group_by(ano,funcao, conta) %>%
+    summarise(
+      despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color=funcao, text = conta))+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#15202B"),
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "right",
+      strip.background = element_rect(fill = "#505050"),
+      strip.text = element_text(color = "white",size = 8)
+    )+
+    labs(
+      x="ano",
+      y= "Despesa",
+      color = "função"
+    ) 
+  
+  if (input$freeScale_funcao){
+    graph<-
+      graph+ 
+      theme(
+        strip.text = element_text(color = "white",size = 7)
+      ) +
+      facet_wrap(conta~., scales = "free_y")
+    
+  } else{
+    graph<-
+      graph+ facet_wrap(conta~.)
+    
+  }
+  
+  ggplotly(graph, tooltip = c("ano", "despesa", "funcao", "text"))
+  
+})
+
+```
+
+# Orgão por Conta
+
+## Inputs {.sidebar data-width="150"}
+
+```{r}
+selectInput(inputId = "orgao", label= "Selecione um órgão", choices= unique(rtn_despesas$ORGAO_DESCRICAO),selected = "MINISTERIO DA SAUDE", multiple = TRUE )
+sliderInput("numero_conta_orgao","Informe o número de contas de maior despesa",1,30,10)
+checkboxInput("valor_historico_conta","Usar valor historico")
+checkboxInput("freeScale_orgao","Usar escala livre")
+```
+
+## Column {data-width = 400}
+
+### Evolução anual para todas contas de acordo com um órgão selecionado (valores em R$mi)
+
+```{r}
+
+renderPlotly({
+  
+  var_valor<- selecionaValor(input$valor_historico_conta)
+  
+  graph<-
+    rtn_despesas %>%
+    filter(ORGAO_DESCRICAO %in% c(input$orgao),
+           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+    rankingTotal("CATEGORIA_RTN",n=input$numero_conta_orgao) %>%
+    mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
+           orgao = str_wrap(ORGAO_DESCRICAO,10),
+           ano = ID_ANO) %>%  
+    group_by(ano,orgao, conta) %>%
+    summarise(
+      despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color= orgao, text= conta))+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#15202B"),
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "right",
+      strip.background = element_rect(fill = "#505050"),
+      strip.text = element_text(color = "white",size = 8)
+    )+
+    labs(
+      x="ano",
+      y= "Despesa",
+      color = "conta"
+    ) 
+  
+  if (input$freeScale_orgao){
+    graph<-
+      graph+ 
+      theme(
+        strip.text = element_text(color = "white",size = 7)
+      ) +
+      facet_wrap(conta~., scales = "free_y")
+    
+  } else{
+    graph<-
+      graph+ facet_wrap(conta~.)
+    
+  }
+  
+  ggplotly(graph, tooltip = c("ano", "despesa", "orgao", "text"))
+  
+  
+})
+
+```
+
+# Programa de trabalho por Conta
+
+## Inputs {.sidebar data-width="150"}
+
+```{r}
+selectInput(inputId = "pt", label= "Selecione um programa de trabalho", choices= unique(rtn_despesas$NO_PROGRAMA_PT),selected = "GESTAO DA POLITICA DE SAUDE", multiple = TRUE )
+sliderInput("numero_conta_pt","Informe o número de contas de maior despesa",1,30,10)
+checkboxInput("valor_historico_pt","Usar valor historico")
+checkboxInput("freeScale_pt","Usar escala livre")
+```
+
+## Column {data-width = 400}
+
+### Evolução anual para todas contas de acordo com um programa de trabalho selecionado (valores em R$mi)
+
+```{r}
+
+renderPlotly({
+  
+  var_valor<- selecionaValor(input$valor_historico_pt)
+  
+  graph<-
+    rtn_despesas %>%
+    filter(NO_PROGRAMA_PT %in% c(input$pt),
+           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+    rankingTotal("CATEGORIA_RTN",n=input$numero_conta_pt) %>%
+    mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
+           ano = ID_ANO,
+           programa = str_wrap(NO_PROGRAMA_PT,10)) %>%  
+    group_by(ano,programa, conta) %>%
+    summarise(
+      despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color=programa))+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#15202B"),
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "#505050"),
+      strip.text = element_text(color = "white")
+    )+
+    labs(
+      color = "conta"
+    ) 
+  
+
+  if (input$freeScale_pt){
+    graph<-
+      graph+ 
+      theme(
+        strip.text = element_text(color = "white",size = 7)
+      ) +
+      facet_wrap(conta~., scales = "free_y")
+    
+  } else{
+    graph<-
+      graph+ facet_wrap(conta~.)
+    
+  }
+  
+  ggplotly(graph, tooltip = c("ano", "programa",  "text"))
+  
+  
+})
+
+```
+
+# Ação orçamentária por Conta
+
+## Inputs {.sidebar data-width="150"}
+
+```{r}
+selectInput(inputId = "acao", label= "Selecione uma ação orçamentária", choices= unique(rtn_despesas$NO_ACAO),selected = "ESTRUTURACAO DE UNIDADES DE ATENCAO ESPECIALIZADA EM SAUDE", multiple = TRUE )
+checkboxInput("freeScale_acao","Usar escala livre")
+```
+
+## Column {data-width = 400}
+
+### Evolução anual para todas contas de acordo com um programa de trabalho selecionado (valores em R\$mi)
+
+```{r}
+
+renderPlot({
+  
+  graph<-
+  rtn_despesas %>%
+  filter(NO_ACAO %in% c(input$acao),
+         ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+  mutate(CATEGORIA_RTN = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
+  group_by(ID_ANO,NO_ACAO, CATEGORIA_RTN) %>%
+  summarise(
+    total_paga_ano = sum(total_paga_ano)
+  ) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_line(aes(x=ID_ANO, y=total_paga_ano/10^6, color=NO_ACAO))+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#15202B"),
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "bottom",
+      strip.background = element_rect(fill = "#505050"),
+      strip.text = element_text(color = "white")
+    )+
+    labs(
+      color = "conta"
+    ) 
+  
+  if (input$freeScale_acao){
+    graph<-
+      graph+ facet_wrap(CATEGORIA_RTN~., scales = "free_y")
+
+  } else{
+    graph<-
+      graph+ facet_wrap(CATEGORIA_RTN~.)
+
+  }
+  
+  graph
+
+  
+})
+
+```
