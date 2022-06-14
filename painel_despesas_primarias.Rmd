@@ -21,8 +21,11 @@ library(readxl)
 library(tidyr)
 library(plotly)
 library(stringr)
+library(scales)
 
 rtn_despesas <- readRDS("rtn_dimensional_ipca.rds")
+
+max_ano<- max(rtn_despesas$ID_ANO)
 
 
 rtn_despesas<-
@@ -67,6 +70,7 @@ rankingTotal<- function(.data,by,n=10){
 ```{r}
 selectInput(inputId = "conta", label= "Selecione uma conta", choices= unique(rtn_despesas$CATEGORIA_RTN),selected = "Pessoal e Encargos Sociais Ativo civil", multiple = TRUE )
 sliderInput("numero_funcao","Informe o número de funções de maior despesa",1,30,10)
+sliderInput("periodo", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 checkboxInput("valor_historico","Usar valor historico")
 checkboxInput("freeScale","Usar escala livre")
 
@@ -85,9 +89,10 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(CATEGORIA_RTN %in% c(input$conta),
-           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+           ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo[1] & ID_ANO<= input$periodo[2]) %>%
     rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
-    mutate( ano=ID_ANO,
+    mutate( ano=trunc(ID_ANO),
             conta = CATEGORIA_RTN,
             NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
     group_by(ano,NO_FUNCAO_PT, conta) %>%
@@ -98,6 +103,7 @@ renderPlotly({
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ))+
     scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= pretty_breaks())+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
@@ -114,7 +120,9 @@ renderPlotly({
   
   if (input$freeScale){
     graph<-
-      graph+ facet_wrap(NO_FUNCAO_PT~., scales = "free_y", ncol = 4)
+      graph+ 
+      facet_wrap(NO_FUNCAO_PT~., scales = "free_y", ncol = 4) +
+      expand_limits(y=0)
     
   } else{
     graph<-
@@ -139,6 +147,7 @@ renderPlotly({
 ```{r}
 selectInput(inputId = "funcao", label= "Selecione uma função", choices= unique(rtn_despesas$NO_FUNCAO_PT),selected = "SAUDE", multiple = TRUE )
 sliderInput("numero_conta_funcao","Informe o número de contas de maior despesa",1,30,10)
+sliderInput("periodo_conta", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 checkboxInput("valor_historico_funcao","Usar valor historico")
 checkboxInput("freeScale_funcao","Usar escala livre")
 ```
@@ -158,10 +167,11 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(NO_FUNCAO_PT %in% c(input$funcao),
-           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+           ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo_conta[1] & ID_ANO<= input$periodo_conta[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_funcao) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
-           funcao = str_wrap(NO_FUNCAO_PT,10),
+           funcao = NO_FUNCAO_PT,
            ano = ID_ANO) %>%  
     group_by(ano,funcao, conta) %>%
     summarise(
@@ -169,8 +179,9 @@ renderPlotly({
     ) %>%
     ungroup() %>%
     ggplot() +
-    geom_line(aes(x=ano, y=despesa, color=funcao, text = conta))+
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(funcao,10), text = paste(conta, funcao, sep = "-")))+
     scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= pretty_breaks())+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
@@ -193,7 +204,8 @@ renderPlotly({
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
-      facet_wrap(conta~., scales = "free_y")
+      facet_wrap(conta~., scales = "free_y")+
+      expand_limits(y=0)
     
   } else{
     graph<-
@@ -201,7 +213,7 @@ renderPlotly({
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa", "funcao", "text"))
+  ggplotly(graph, tooltip = c("ano", "despesa", "text"))
   
 })
 
@@ -214,7 +226,8 @@ renderPlotly({
 ```{r}
 selectInput(inputId = "orgao", label= "Selecione um órgão", choices= unique(rtn_despesas$ORGAO_DESCRICAO),selected = "MINISTERIO DA SAUDE", multiple = TRUE )
 sliderInput("numero_conta_orgao","Informe o número de contas de maior despesa",1,30,10)
-checkboxInput("valor_historico_conta","Usar valor historico")
+sliderInput("periodo_orgao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+checkboxInput("valor_historico_orgao","Usar valor historico")
 checkboxInput("freeScale_orgao","Usar escala livre")
 ```
 
@@ -226,15 +239,16 @@ checkboxInput("freeScale_orgao","Usar escala livre")
 
 renderPlotly({
   
-  var_valor<- selecionaValor(input$valor_historico_conta)
+  var_valor<- selecionaValor(input$valor_historico_orgao)
   
   graph<-
     rtn_despesas %>%
     filter(ORGAO_DESCRICAO %in% c(input$orgao),
-           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+           ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo_orgao[1] & ID_ANO<= input$periodo_orgao[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_orgao) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
-           orgao = str_wrap(ORGAO_DESCRICAO,10),
+           orgao = ORGAO_DESCRICAO,
            ano = ID_ANO) %>%  
     group_by(ano,orgao, conta) %>%
     summarise(
@@ -242,8 +256,9 @@ renderPlotly({
     ) %>%
     ungroup() %>%
     ggplot() +
-    geom_line(aes(x=ano, y=despesa, color= orgao, text= conta))+
+    geom_line(aes(x=ano, y=despesa, color= str_wrap(orgao,10), text= paste(conta, orgao, sep = "-" )))+
     scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= pretty_breaks())+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
@@ -266,7 +281,8 @@ renderPlotly({
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
-      facet_wrap(conta~., scales = "free_y")
+      facet_wrap(conta~., scales = "free_y")+
+      expand_limits(y=0)
     
   } else{
     graph<-
@@ -274,7 +290,7 @@ renderPlotly({
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa", "orgao", "text"))
+  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
   
   
 })
@@ -288,6 +304,7 @@ renderPlotly({
 ```{r}
 selectInput(inputId = "pt", label= "Selecione um programa de trabalho", choices= unique(rtn_despesas$NO_PROGRAMA_PT),selected = "GESTAO DA POLITICA DE SAUDE", multiple = TRUE )
 sliderInput("numero_conta_pt","Informe o número de contas de maior despesa",1,30,10)
+sliderInput("periodo_pt", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 checkboxInput("valor_historico_pt","Usar valor historico")
 checkboxInput("freeScale_pt","Usar escala livre")
 ```
@@ -305,19 +322,21 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(NO_PROGRAMA_PT %in% c(input$pt),
-           ID_ANO<max(rtn_despesas$ID_ANO)) %>%
+           ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo_pt[1] & ID_ANO<= input$periodo_pt[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_pt) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
            ano = ID_ANO,
-           programa = str_wrap(NO_PROGRAMA_PT,10)) %>%  
+           programa = NO_PROGRAMA_PT) %>%  
     group_by(ano,programa, conta) %>%
     summarise(
       despesa = round(sum(!!sym(var_valor))/10^6)
     ) %>%
     ungroup() %>%
     ggplot() +
-    geom_line(aes(x=ano, y=despesa, color=programa))+
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(programa,10), text= paste(conta, programa, sep = "-")))+
     scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= pretty_breaks())+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
@@ -339,7 +358,8 @@ renderPlotly({
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
-      facet_wrap(conta~., scales = "free_y")
+      facet_wrap(conta~., scales = "free_y")+
+      expand_limits(y=0)
     
   } else{
     graph<-
@@ -347,7 +367,7 @@ renderPlotly({
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "programa",  "text"))
+  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
   
   
 })
@@ -360,6 +380,9 @@ renderPlotly({
 
 ```{r}
 selectInput(inputId = "acao", label= "Selecione uma ação orçamentária", choices= unique(rtn_despesas$NO_ACAO),selected = "ESTRUTURACAO DE UNIDADES DE ATENCAO ESPECIALIZADA EM SAUDE", multiple = TRUE )
+sliderInput("numero_conta_acao","Informe o número de contas de maior despesa",1,30,10)
+sliderInput("periodo_acao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+checkboxInput("valor_historico_acao","Usar valor historico")
 checkboxInput("freeScale_acao","Usar escala livre")
 ```
 
@@ -369,28 +392,36 @@ checkboxInput("freeScale_acao","Usar escala livre")
 
 ```{r}
 
-renderPlot({
+renderPlotly({
+  
+  var_valor<- selecionaValor(input$valor_historico_acao)
   
   graph<-
-  rtn_despesas %>%
-  filter(NO_ACAO %in% c(input$acao),
-         ID_ANO<max(rtn_despesas$ID_ANO)) %>%
-  mutate(CATEGORIA_RTN = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
-  group_by(ID_ANO,NO_ACAO, CATEGORIA_RTN) %>%
-  summarise(
-    total_paga_ano = sum(total_paga_ano)
-  ) %>%
-  ungroup() %>%
-  ggplot() +
-  geom_line(aes(x=ID_ANO, y=total_paga_ano/10^6, color=NO_ACAO))+
+    rtn_despesas %>%
+    filter(NO_ACAO %in% c(input$acao),
+           ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo_acao[1] & ID_ANO<= input$periodo_acao[2]) %>%
+    mutate(CATEGORIA_RTN = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
+    rankingTotal("CATEGORIA_RTN",n=input$numero_conta_acao) %>%
+    mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
+           ano = ID_ANO,
+           acao = NO_ACAO) %>%    
+    group_by(ano, acao, conta) %>%
+    summarise(
+      despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(acao,10), text = paste(conta, acao, sep="-")))+
     scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= pretty_breaks())+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
       panel.background = element_rect(fill = "#15202B"),
       panel.grid = element_blank(),
       axis.title.x = element_blank(),
-      legend.position = "bottom",
+      legend.position = "right",
       strip.background = element_rect(fill = "#505050"),
       strip.text = element_text(color = "white")
     )+
@@ -400,16 +431,18 @@ renderPlot({
   
   if (input$freeScale_acao){
     graph<-
-      graph+ facet_wrap(CATEGORIA_RTN~., scales = "free_y")
-
+      graph+ 
+      facet_wrap(conta~., scales = "free_y")+
+      expand_limits(y=0)
+    
   } else{
     graph<-
-      graph+ facet_wrap(CATEGORIA_RTN~.)
-
+      graph+ facet_wrap(conta~.)
+    
   }
   
-  graph
-
+  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
+  
   
 })
 
