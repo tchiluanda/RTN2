@@ -23,16 +23,6 @@ library(plotly)
 library(stringr)
 library(scales)
 
-rtn_despesas <- readRDS("rtn_dimensional_ipca.rds")
-
-max_ano<- max(rtn_despesas$ID_ANO)
-
-
-rtn_despesas<-
-  rtn_despesas %>%
-    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"II\\.","2\\.")) %>% 
-    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"I\\.","1\\.")) %>% 
-    mutate(CATEGORIA_RTN= stringr::str_squish ( stringr::str_remove_all(CATEGORIA_RTN,"[:punct:]|[0-9]|[:symbol:]")))
 
 selecionaValor <- function(tipo_valor_historico){
   
@@ -59,6 +49,116 @@ rankingTotal<- function(.data,by,n=10){
         distinct(!!sym(by))   
     )   
 }
+
+
+trazDadosAtualizados<- function(){
+  
+  #Traz o rtn_dimensional_ipca atual
+  rtn_dimensional_ipca <- readRDS("rtn_dimensional_ipca.rds")
+
+  
+  #Traz todos os datasets que tratam de despesas primárias
+  datasets<- ckanr::resource_search(url = "https://www.tesourotransparente.gov.br/ckan",
+                                    id="8675a0a4-31c5-4593-a24d-fb8e17376eca",
+                                    q= "name:Despesas e Transferências Totais da União")
+  
+  #O primeiro dataset é sempre o do último ano
+  
+  #Checa se é necessário atualizar o modelo dimensional
+  data_ultima_atualizacao<-url_despesa_ult_mes<-datasets[["results"]][[1]][["last_modified"]]
+  
+  lubridate::as_date(data_ultima_atualizacao)
+  
+  
+  load("data_ultimo_rds.RData")
+  
+  
+  #Se a data for superior ao último processamento atualiza o modelo dimensional
+  if (lubridate::as_date(data_ultima_atualizacao) > data_ultimo_rds){
+    url_despesa_ult_mes<-datasets[["results"]][[1]][["url"]]
+    
+    download.file(url = url_despesa_ult_mes, destfile = "arquivo_despesa.xlsx", mode = "wb")
+    
+    sheets<- readxl::excel_sheets("arquivo_despesa.xlsx")
+    
+    if (length(sheets)==2){
+      sheet_num<- 1
+    } else{
+      sheet_num <- 2
+    }
+    
+    
+    
+    rtn_despesas_primarias_ult_ano<-
+      readxl::read_xlsx("arquivo_despesa.xlsx", sheet = sheet_num)
+    
+    
+    
+    #Processa os dados de IPCA
+    tb_ckan<-resource_show(id="527ccdb1-3059-42f3-bf23-b5e3ab4c6dc6",url="http://www.tesourotransparente.gov.br/ckan")
+    
+    
+    URL_add <- tb_ckan$url
+    
+    tmp <- tempfile(fileext = ".xlsx")
+    
+    download.file(URL_add,mode = "wb", destfile = tmp, extra = "-R", method = "libcurl")
+    
+    names_deflator_IPCA <- read_xlsx(tmp,sheet = 3,skip = 4,n_max = 1, col_names = TRUE)
+    deflator_IPCA <- read_xlsx(tmp,sheet = 3,skip = 74,n_max = 1, col_names = FALSE)
+    
+    names(deflator_IPCA) <- names(names_deflator_IPCA)
+    
+    names(deflator_IPCA)[1]<-"Rubrica"
+    series_temporais_analise_IPCA<-gather(deflator_IPCA,Data, Valor,-Rubrica)
+    #series_temporais_analise_IPCA$Data<-gsub("X","",series_temporais_analise_IPCA$Data)
+    series_temporais_analise_IPCA$Data<-as.Date(as.numeric(series_temporais_analise_IPCA$Data), origin="1899-12-30")
+    series_temporais_analise_IPCA$Valor <-as.numeric(series_temporais_analise_IPCA$Valor)
+    
+    
+    
+    
+    ultimo_ano<- max(rtn_dimensional_ipca$ID_ANO)
+    
+    #Gera o novo rtn_dimensional_ipca 
+    rtn_dimensional_ipca<-
+      rtn_despesas_primarias_ult_ano %>%
+      mutate(Data = as.Date(paste(ID_ANO, ID_MES,"01",sep="-")) ) %>%
+      inner_join(series_temporais_analise_IPCA) %>%
+      mutate(valor_deflacionado = DESPESAS_PAGAS * Valor) %>%
+      group_by(ID_ANO, CATEGORIA_RTN,NO_FUNCAO_PT, ORGAO_DESCRICAO, NO_PROGRAMA_PT,NO_ACAO) %>%
+      summarise(
+        total_paga_ano = sum(DESPESAS_PAGAS),
+        total_paga_ano_deflacionado = sum(valor_deflacionado)
+      ) %>%
+      ungroup() %>%
+      bind_rows(
+        rtn_dimensional_ipca %>%
+          filter(ID_ANO!=ultimo_ano)
+      )
+    
+    
+    
+    data_ultimo_rds<- lubridate::today()
+    save(list = "data_ultimo_rds", file = "data_ultimo_rds.RData")
+    
+    
+  }
+  
+  rtn_dimensional_ipca
+}
+
+
+rtn_despesas <- trazDadosAtualizados()# readRDS("rtn_dimensional_ipca.rds")
+
+max_ano<- max(rtn_despesas$ID_ANO)
+
+
+rtn_despesas<-
+  rtn_despesas %>%
+    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"II\\.","2\\.")) %>% 
+    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"I\\.","1\\.")) %>% 
+    mutate(CATEGORIA_RTN= stringr::str_squish ( stringr::str_remove_all(CATEGORIA_RTN,"[:punct:]|[0-9]|[:symbol:]")))
 
 
 ```
@@ -89,7 +189,7 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(CATEGORIA_RTN %in% c(input$conta),
-           ID_ANO<max(rtn_despesas$ID_ANO),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
            ID_ANO>= input$periodo[1] & ID_ANO<= input$periodo[2]) %>%
     rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
     mutate( ano=trunc(ID_ANO),
@@ -167,7 +267,7 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(NO_FUNCAO_PT %in% c(input$funcao),
-           ID_ANO<max(rtn_despesas$ID_ANO),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
            ID_ANO>= input$periodo_conta[1] & ID_ANO<= input$periodo_conta[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_funcao) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
@@ -244,7 +344,7 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(ORGAO_DESCRICAO %in% c(input$orgao),
-           ID_ANO<max(rtn_despesas$ID_ANO),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
            ID_ANO>= input$periodo_orgao[1] & ID_ANO<= input$periodo_orgao[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_orgao) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
@@ -322,7 +422,7 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(NO_PROGRAMA_PT %in% c(input$pt),
-           ID_ANO<max(rtn_despesas$ID_ANO),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
            ID_ANO>= input$periodo_pt[1] & ID_ANO<= input$periodo_pt[2]) %>%
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_pt) %>%
     mutate(conta = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE),
@@ -399,7 +499,7 @@ renderPlotly({
   graph<-
     rtn_despesas %>%
     filter(NO_ACAO %in% c(input$acao),
-           ID_ANO<max(rtn_despesas$ID_ANO),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
            ID_ANO>= input$periodo_acao[1] & ID_ANO<= input$periodo_acao[2]) %>%
     mutate(CATEGORIA_RTN = forcats::fct_reorder(CATEGORIA_RTN,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
     rankingTotal("CATEGORIA_RTN",n=input$numero_conta_acao) %>%
