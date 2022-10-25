@@ -169,10 +169,35 @@ rtn_despesas<-
 
 ```{r}
 selectInput(inputId = "conta", label= "Selecione uma conta", choices= unique(rtn_despesas$CATEGORIA_RTN),selected = "Pessoal e Encargos Sociais Ativo civil", multiple = TRUE )
+
 sliderInput("numero_funcao","Informe o número de funções de maior despesa",1,30,10)
+
 sliderInput("periodo", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+
 checkboxInput("valor_historico","Usar valor historico")
+
 checkboxInput("freeScale","Usar escala livre")
+
+# Create placeholder for the downloadButton
+uiOutput("downloadUI_serie")
+# Create the actual downloadButton
+
+output$downloadUI_serie <- renderUI( {
+  downloadButton("download_serie","Download", style = "width:100%;")
+})
+
+
+output$download_serie<- downloadHandler(
+  filename = function() {
+    paste('dados_serie_temporal',  '.csv', sep='')
+  },
+  content = function(file) {
+
+    dados_serie_temporal <- graph_1$data
+    write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
+  }
+)
+
 
 ```
 
@@ -186,7 +211,7 @@ renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico)
   
-  graph<-
+  graph_1<<-
     rtn_despesas %>%
     filter(CATEGORIA_RTN %in% c(input$conta),
            #ID_ANO<max(rtn_despesas$ID_ANO),
@@ -219,21 +244,21 @@ renderPlotly({
     ) 
   
   if (input$freeScale){
-    graph<-
-      graph+ 
+    graph_1<<-
+      graph_1+ 
       facet_wrap(NO_FUNCAO_PT~., scales = "free_y", ncol = 4) +
       expand_limits(y=0)
     
   } else{
-    graph<-
-      graph+ facet_wrap(NO_FUNCAO_PT~.)
+    graph_1<<-
+      graph_1+ facet_wrap(NO_FUNCAO_PT~.)
     
   }
   
   
   #graph
   
-  ggplotly(graph, tooltip = c("ano", "despesa", "text"))
+  ggplotly(graph_1, tooltip = c("ano", "despesa", "text"))
   
   
 })
@@ -246,10 +271,35 @@ renderPlotly({
 
 ```{r}
 selectInput(inputId = "funcao", label= "Selecione uma função", choices= unique(rtn_despesas$NO_FUNCAO_PT),selected = "SAUDE", multiple = TRUE )
+
 sliderInput("numero_conta_funcao","Informe o número de contas de maior despesa",1,30,10)
+
 sliderInput("periodo_conta", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+
 checkboxInput("valor_historico_funcao","Usar valor historico")
+
 checkboxInput("freeScale_funcao","Usar escala livre")
+
+# Create placeholder for the downloadButton
+uiOutput("downloadUI_serie_2")
+# Create the actual downloadButton
+
+output$downloadUI_serie_2 <- renderUI( {
+  downloadButton("download_serie_2","Download", style = "width:100%;")
+})
+
+
+output$download_serie_2<- downloadHandler(
+  filename = function() {
+    paste('dados_serie_temporal',  '.csv', sep='')
+  },
+  content = function(file) {
+
+    dados_serie_temporal <- graph_2$data
+    write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
+  }
+)
+
 ```
 
 ## Column {data-width = 400}
@@ -264,7 +314,7 @@ renderPlotly({
   var_valor<- selecionaValor(input$valor_historico_funcao)
 
   
-  graph<-
+  graph_2<<-
     rtn_despesas %>%
     filter(NO_FUNCAO_PT %in% c(input$funcao),
            #ID_ANO<max(rtn_despesas$ID_ANO),
@@ -299,8 +349,8 @@ renderPlotly({
     ) 
   
   if (input$freeScale_funcao){
-    graph<-
-      graph+ 
+    graph_2<<-
+      graph_2+ 
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
@@ -308,12 +358,12 @@ renderPlotly({
       expand_limits(y=0)
     
   } else{
-    graph<-
-      graph+ facet_wrap(conta~.)
+    graph_2<<-
+      graph_2+ facet_wrap(conta~.)
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa", "text"))
+  ggplotly(graph_2, tooltip = c("ano", "despesa", "text"))
   
 })
 
@@ -325,10 +375,35 @@ renderPlotly({
 
 ```{r}
 selectInput(inputId = "orgao", label= "Selecione um órgão", choices= unique(rtn_despesas$ORGAO_DESCRICAO),selected = "MINISTERIO DA SAUDE", multiple = TRUE )
+
 sliderInput("numero_conta_orgao","Informe o número de contas de maior despesa",1,30,10)
+
 sliderInput("periodo_orgao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+
 checkboxInput("valor_historico_orgao","Usar valor historico")
+
 checkboxInput("freeScale_orgao","Usar escala livre")
+
+# Create placeholder for the downloadButton
+uiOutput("downloadUI_serie_3")
+# Create the actual downloadButton
+
+output$downloadUI_serie_3 <- renderUI( {
+  downloadButton("download_serie_3","Download", style = "width:100%;")
+})
+
+
+output$download_serie_3<- downloadHandler(
+  filename = function() {
+    paste('dados_serie_temporal',  '.csv', sep='')
+  },
+  content = function(file) {
+
+    dados_serie_temporal <- graph_3$data
+    write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
+  }
+)
+
 ```
 
 ## Column {data-width = 400}
@@ -341,7 +416,7 @@ renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico_orgao)
   
-  graph<-
+  graph_3<<-
     rtn_despesas %>%
     filter(ORGAO_DESCRICAO %in% c(input$orgao),
            #ID_ANO<max(rtn_despesas$ID_ANO),
@@ -376,7 +451,7 @@ renderPlotly({
     ) 
   
   if (input$freeScale_orgao){
-    graph<-
+    graph_3<<-
       graph+ 
       theme(
         strip.text = element_text(color = "white",size = 7)
@@ -385,12 +460,12 @@ renderPlotly({
       expand_limits(y=0)
     
   } else{
-    graph<-
-      graph+ facet_wrap(conta~.)
+    graph_3<<-
+      graph_3+ facet_wrap(conta~.)
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
+  ggplotly(graph_3, tooltip = c("ano", "despesa",  "text"))
   
   
 })
@@ -403,10 +478,35 @@ renderPlotly({
 
 ```{r}
 selectInput(inputId = "pt", label= "Selecione um programa de trabalho", choices= unique(rtn_despesas$NO_PROGRAMA_PT),selected = "GESTAO DA POLITICA DE SAUDE", multiple = TRUE )
+
 sliderInput("numero_conta_pt","Informe o número de contas de maior despesa",1,30,10)
+
 sliderInput("periodo_pt", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+
 checkboxInput("valor_historico_pt","Usar valor historico")
+
 checkboxInput("freeScale_pt","Usar escala livre")
+
+# Create placeholder for the downloadButton
+uiOutput("downloadUI_serie_4")
+# Create the actual downloadButton
+
+output$downloadUI_serie_4 <- renderUI( {
+  downloadButton("download_serie_4","Download", style = "width:100%;")
+})
+
+
+output$download_serie_4<- downloadHandler(
+  filename = function() {
+    paste('dados_serie_temporal',  '.csv', sep='')
+  },
+  content = function(file) {
+
+    dados_serie_temporal <- graph_4$data
+    write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
+  }
+)
+
 ```
 
 ## Column {data-width = 400}
@@ -419,7 +519,7 @@ renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico_pt)
   
-  graph<-
+  graph_4<<-
     rtn_despesas %>%
     filter(NO_PROGRAMA_PT %in% c(input$pt),
            #ID_ANO<max(rtn_despesas$ID_ANO),
@@ -453,8 +553,8 @@ renderPlotly({
   
 
   if (input$freeScale_pt){
-    graph<-
-      graph+ 
+    graph_4<<-
+      graph_4+ 
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
@@ -462,12 +562,12 @@ renderPlotly({
       expand_limits(y=0)
     
   } else{
-    graph<-
-      graph+ facet_wrap(conta~.)
+    graph_4<-
+      graph_4+ facet_wrap(conta~.)
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
+  ggplotly(graph_4, tooltip = c("ano", "despesa",  "text"))
   
   
 })
@@ -480,10 +580,35 @@ renderPlotly({
 
 ```{r}
 selectInput(inputId = "acao", label= "Selecione uma ação orçamentária", choices= unique(rtn_despesas$NO_ACAO),selected = "ESTRUTURACAO DE UNIDADES DE ATENCAO ESPECIALIZADA EM SAUDE", multiple = TRUE )
+
 sliderInput("numero_conta_acao","Informe o número de contas de maior despesa",1,30,10)
+
 sliderInput("periodo_acao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
+
 checkboxInput("valor_historico_acao","Usar valor historico")
+
 checkboxInput("freeScale_acao","Usar escala livre")
+
+# Create placeholder for the downloadButton
+uiOutput("downloadUI_serie_5")
+# Create the actual downloadButton
+
+output$downloadUI_serie_5 <- renderUI( {
+  downloadButton("download_serie_5","Download", style = "width:100%;")
+})
+
+
+output$download_serie_5<- downloadHandler(
+  filename = function() {
+    paste('dados_serie_temporal',  '.csv', sep='')
+  },
+  content = function(file) {
+
+    dados_serie_temporal <- graph_5$data
+    write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
+  }
+)
+
 ```
 
 ## Column {data-width = 400}
@@ -496,7 +621,7 @@ renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico_acao)
   
-  graph<-
+  graph_5<<-
     rtn_despesas %>%
     filter(NO_ACAO %in% c(input$acao),
            #ID_ANO<max(rtn_despesas$ID_ANO),
@@ -530,18 +655,18 @@ renderPlotly({
     ) 
   
   if (input$freeScale_acao){
-    graph<-
-      graph+ 
+    graph_5<<-
+      graph_5+ 
       facet_wrap(conta~., scales = "free_y")+
       expand_limits(y=0)
     
   } else{
-    graph<-
-      graph+ facet_wrap(conta~.)
+    graph_5<<-
+      graph_5+ facet_wrap(conta~.)
     
   }
   
-  ggplotly(graph, tooltip = c("ano", "despesa",  "text"))
+  ggplotly(graph_5, tooltip = c("ano", "despesa",  "text"))
   
   
 })
