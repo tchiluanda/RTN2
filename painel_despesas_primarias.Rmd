@@ -22,6 +22,7 @@ library(tidyr)
 library(plotly)
 library(stringr)
 library(scales)
+library(ggiraph)
 
 
 selecionaValor <- function(tipo_valor_historico){
@@ -174,7 +175,7 @@ sliderInput("numero_funcao","Informe o número de funções de maior despesa",1,
 
 sliderInput("periodo", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 
-checkboxInput("valor_historico","Usar valor historico")
+checkboxInput("valor_historico","Usar valor nominal")
 
 checkboxInput("freeScale","Usar escala livre")
 
@@ -203,11 +204,16 @@ output$download_serie<- downloadHandler(
 
 ## Column {data-width = 400}
 
-### Evolução anual para todas funções de acordo com uma conta selecionada (valores em R\$mi)
+### Evolução anual para um ranking de funções de acordo com uma conta selecionada (valores em R\$mi).
 
 ```{r}
 
-renderPlotly({
+
+
+condicao <-1
+
+if (condicao==1){
+  renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico)
   
@@ -226,27 +232,27 @@ renderPlotly({
     ) %>%
     ungroup() %>%
     ggplot() +
-    geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ))+
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ), size=0.8)+
     scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= pretty_breaks())+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#15202B"),
+      panel.background = element_rect(fill = "#000080"), # "#121212"
       panel.grid = element_blank(),
       axis.title.x = element_blank(),
       legend.position = "right",
-      strip.background = element_rect(fill = "#505050"),
-      strip.text = element_text(color = "white")
+      strip.background = element_rect(fill = "white"), ##505050
+      strip.text = element_text(color = "black",size = 7)
     )+
     labs(
       color = "conta"
-    ) 
+    )
   
   if (input$freeScale){
     graph_1<<-
       graph_1+ 
-      facet_wrap(NO_FUNCAO_PT~., scales = "free_y", ncol = 4) +
+      facet_wrap(NO_FUNCAO_PT~., scales = "free_y") +
       expand_limits(y=0)
     
   } else{
@@ -256,14 +262,81 @@ renderPlotly({
   }
   
   
-  #graph
+  #graph_1
   
   ggplotly(graph_1, tooltip = c("ano", "despesa", "text"))
   
   
+  
+  
 })
 
+  
+} else {
+    renderPlot({
+  
+  var_valor<- selecionaValor(input$valor_historico)
+  
+  graph_1<<-
+    rtn_despesas %>%
+    filter(CATEGORIA_RTN %in% c(input$conta),
+           #ID_ANO<max(rtn_despesas$ID_ANO),
+           ID_ANO>= input$periodo[1] & ID_ANO<= input$periodo[2]) %>%
+    rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
+    mutate( ano=trunc(ID_ANO),
+            conta = CATEGORIA_RTN,
+            NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
+    group_by(ano,NO_FUNCAO_PT, conta) %>%
+    summarise(
+       despesa = round(sum(!!sym(var_valor))/10^6)
+    ) %>%
+    ungroup() %>%
+    ggplot() +
+    geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ), size=0.8)+
+    scale_color_discrete_qualitative(palette = "Dark 3")+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
+    theme_light() +
+    theme(
+      axis.text.x = element_text(angle = 90),
+      panel.background = element_rect(fill = "#000080"), # "#121212"
+      panel.grid = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "right",
+      strip.background = element_rect(fill = "white"),##505050
+      strip.text = element_text(color = "black",size = 8)
+    )+
+    labs(
+      color = "conta"
+    )
+  
+  if (input$freeScale){
+    graph_1<<-
+      graph_1+ 
+      facet_wrap(NO_FUNCAO_PT~., scales = "free_y") +
+      expand_limits(y=0)
+    
+  } else{
+    graph_1<<-
+      graph_1+ facet_wrap(NO_FUNCAO_PT~.)
+    
+  }
+  
+  
+  graph_1
+  
+  #ggplot(graph_1, tooltip = c("ano", "despesa", "text"))
+  
+  
+  
+  
+})
+
+  
+}
+
 ```
+
+
 
 # Função por Conta
 
@@ -276,7 +349,7 @@ sliderInput("numero_conta_funcao","Informe o número de contas de maior despesa"
 
 sliderInput("periodo_conta", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 
-checkboxInput("valor_historico_funcao","Usar valor historico")
+checkboxInput("valor_historico_funcao","Usar valor nominal")
 
 checkboxInput("freeScale_funcao","Usar escala livre")
 
@@ -380,7 +453,7 @@ sliderInput("numero_conta_orgao","Informe o número de contas de maior despesa",
 
 sliderInput("periodo_orgao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 
-checkboxInput("valor_historico_orgao","Usar valor historico")
+checkboxInput("valor_historico_orgao","Usar valor nominal")
 
 checkboxInput("freeScale_orgao","Usar escala livre")
 
@@ -483,7 +556,7 @@ sliderInput("numero_conta_pt","Informe o número de contas de maior despesa",1,3
 
 sliderInput("periodo_pt", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 
-checkboxInput("valor_historico_pt","Usar valor historico")
+checkboxInput("valor_historico_pt","Usar valor nominal")
 
 checkboxInput("freeScale_pt","Usar escala livre")
 
@@ -585,7 +658,7 @@ sliderInput("numero_conta_acao","Informe o número de contas de maior despesa",1
 
 sliderInput("periodo_acao", "Informe o período",2008, max_ano,c(2008,max_ano), sep="")
 
-checkboxInput("valor_historico_acao","Usar valor historico")
+checkboxInput("valor_historico_acao","Usar valor nominal")
 
 checkboxInput("freeScale_acao","Usar escala livre")
 
