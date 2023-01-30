@@ -22,7 +22,6 @@ library(tidyr)
 library(plotly)
 library(stringr)
 library(scales)
-library(ggiraph)
 
 
 selecionaValor <- function(tipo_valor_historico){
@@ -32,13 +31,13 @@ selecionaValor <- function(tipo_valor_historico){
   } else{
     var_valor<- "total_paga_ano_deflacionado"
   }
-
+  
   var_valor
 }
 
 rankingTotal<- function(.data,by,n=10){
   
-
+  
   .data %>%
     inner_join(
       .data %>%
@@ -56,7 +55,7 @@ trazDadosAtualizados<- function(){
   
   #Traz o rtn_dimensional_ipca atual
   rtn_dimensional_ipca <- readRDS("rtn_dimensional_ipca.rds")
-
+  
   
   #Traz todos os datasets que tratam de despesas primárias
   datasets<- ckanr::resource_search(url = "https://www.tesourotransparente.gov.br/ckan",
@@ -82,11 +81,13 @@ trazDadosAtualizados<- function(){
     
     sheets<- readxl::excel_sheets("arquivo_despesa.xlsx")
     
-    if (length(sheets)==2){
-      sheet_num<- 1
-    } else{
-      sheet_num <- 2
-    }
+    sheet_num <- 2
+    
+    # if (length(sheets)==2){
+    #   sheet_num<- 1
+    # } else{
+    #   sheet_num <- 2
+    # }
     
     
     
@@ -150,6 +151,9 @@ trazDadosAtualizados<- function(){
 }
 
 
+pal_manual<-function () { c("#FFADC9", "#FFC470", "#D4DD3F", "#63EF8A", "#00F4DE", "#00E7FF", "#D5C7FF","#FFABFF" )}
+
+
 rtn_despesas <- trazDadosAtualizados()# readRDS("rtn_dimensional_ipca.rds")
 
 max_ano<- max(rtn_despesas$ID_ANO)
@@ -157,9 +161,11 @@ max_ano<- max(rtn_despesas$ID_ANO)
 
 rtn_despesas<-
   rtn_despesas %>%
-    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"II\\.","2\\.")) %>% 
-    mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"I\\.","1\\.")) %>% 
-    mutate(CATEGORIA_RTN= stringr::str_squish ( stringr::str_remove_all(CATEGORIA_RTN,"[:punct:]|[0-9]|[:symbol:]")))
+  mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"II\\.","2\\.")) %>% 
+  mutate(CATEGORIA_RTN = stringr::str_replace_all(CATEGORIA_RTN,"I\\.","1\\.")) %>% 
+  mutate(CATEGORIA_RTN= stringr::str_squish ( stringr::str_remove_all(CATEGORIA_RTN,"[:punct:]|[0-9]|[:symbol:]")))
+
+
 
 
 ```
@@ -193,7 +199,7 @@ output$download_serie<- downloadHandler(
     paste('dados_serie_temporal',  '.csv', sep='')
   },
   content = function(file) {
-
+    
     dados_serie_temporal <- graph_1$data
     write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
   }
@@ -210,10 +216,7 @@ output$download_serie<- downloadHandler(
 
 
 
-condicao <-1
-
-if (condicao==1){
-  renderPlotly({
+renderPlotly({
   
   var_valor<- selecionaValor(input$valor_historico)
   
@@ -225,22 +228,24 @@ if (condicao==1){
     rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
     mutate( ano=trunc(ID_ANO),
             conta = CATEGORIA_RTN,
-            NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
+            NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%
     group_by(ano,NO_FUNCAO_PT, conta) %>%
     summarise(
-       despesa = round(sum(!!sym(var_valor))/10^6)
+      despesa = round(sum(!!sym(var_valor))/10^6)
     ) %>%
     ungroup() %>%
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ), size=0.8)+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
+    geom_point(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ), size=1)+
+    #scale_color_discrete_qualitative(palette = "Pastel 1")+
+    scale_color_manual(values= pal_manual())+
     scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#000080"), # "#121212"
+      panel.background = element_rect(fill = "#575756"), # "#121212" ##808080 #000080 #575756
       panel.grid = element_blank(),
-      axis.title.x = element_blank(),
+      axis.title = element_blank(),
       legend.position = "right",
       strip.background = element_rect(fill = "white"), ##505050
       strip.text = element_text(color = "black",size = 7)
@@ -251,18 +256,17 @@ if (condicao==1){
   
   if (input$freeScale){
     graph_1<<-
-      graph_1+ 
-      facet_wrap(NO_FUNCAO_PT~., scales = "free_y") +
+      graph_1+
+      facet_wrap( str_to_title(NO_FUNCAO_PT)~., scales = "free_y") +
       expand_limits(y=0)
     
   } else{
     graph_1<<-
-      graph_1+ facet_wrap(NO_FUNCAO_PT~.)
+      graph_1+ facet_wrap( str_to_title(NO_FUNCAO_PT)~.)
     
   }
   
   
-  #graph_1
   
   ggplotly(graph_1, tooltip = c("ano", "despesa", "text"))
   
@@ -271,68 +275,6 @@ if (condicao==1){
   
 })
 
-  
-} else {
-    renderPlot({
-  
-  var_valor<- selecionaValor(input$valor_historico)
-  
-  graph_1<<-
-    rtn_despesas %>%
-    filter(CATEGORIA_RTN %in% c(input$conta),
-           #ID_ANO<max(rtn_despesas$ID_ANO),
-           ID_ANO>= input$periodo[1] & ID_ANO<= input$periodo[2]) %>%
-    rankingTotal("NO_FUNCAO_PT",n=input$numero_funcao) %>%
-    mutate( ano=trunc(ID_ANO),
-            conta = CATEGORIA_RTN,
-            NO_FUNCAO_PT = forcats::fct_reorder(NO_FUNCAO_PT,total_paga_ano,.fun = sum, .desc = TRUE)) %>%  
-    group_by(ano,NO_FUNCAO_PT, conta) %>%
-    summarise(
-       despesa = round(sum(!!sym(var_valor))/10^6)
-    ) %>%
-    ungroup() %>%
-    ggplot() +
-    geom_line(aes(x=ano, y=despesa, color=str_wrap(conta,10), text= conta ), size=0.8)+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
-    theme_light() +
-    theme(
-      axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#000080"), # "#121212"
-      panel.grid = element_blank(),
-      axis.title.x = element_blank(),
-      legend.position = "right",
-      strip.background = element_rect(fill = "white"),##505050
-      strip.text = element_text(color = "black",size = 8)
-    )+
-    labs(
-      color = "conta"
-    )
-  
-  if (input$freeScale){
-    graph_1<<-
-      graph_1+ 
-      facet_wrap(NO_FUNCAO_PT~., scales = "free_y") +
-      expand_limits(y=0)
-    
-  } else{
-    graph_1<<-
-      graph_1+ facet_wrap(NO_FUNCAO_PT~.)
-    
-  }
-  
-  
-  graph_1
-  
-  #ggplot(graph_1, tooltip = c("ano", "despesa", "text"))
-  
-  
-  
-  
-})
-
-  
-}
 
 ```
 
@@ -367,7 +309,7 @@ output$download_serie_2<- downloadHandler(
     paste('dados_serie_temporal',  '.csv', sep='')
   },
   content = function(file) {
-
+    
     dados_serie_temporal <- graph_2$data
     write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
   }
@@ -385,7 +327,7 @@ renderPlotly({
   
   
   var_valor<- selecionaValor(input$valor_historico_funcao)
-
+  
   
   graph_2<<-
     rtn_despesas %>%
@@ -403,17 +345,19 @@ renderPlotly({
     ungroup() %>%
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color=str_wrap(funcao,10), text = paste(conta, funcao, sep = "-")))+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= pretty_breaks())+
+    geom_point(aes(x=ano, y=despesa, color=str_wrap(funcao,10), text= paste(conta, funcao, sep = "-") ), size=1)+
+    #scale_color_discrete_qualitative(palette = "Pastel 1")+
+    scale_color_manual(values= pal_manual())+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#15202B"),
+      panel.background = element_rect(fill = "#575756"), # "#121212" ##808080 #000080 #575756
       panel.grid = element_blank(),
-      axis.title.x = element_blank(),
+      axis.title = element_blank(),
       legend.position = "right",
-      strip.background = element_rect(fill = "#505050"),
-      strip.text = element_text(color = "white",size = 8)
+      strip.background = element_rect(fill = "white"), ##505050
+      strip.text = element_text(color = "black",size = 7)
     )+
     labs(
       x="ano",
@@ -423,16 +367,13 @@ renderPlotly({
   
   if (input$freeScale_funcao){
     graph_2<<-
-      graph_2+ 
-      theme(
-        strip.text = element_text(color = "white",size = 7)
-      ) +
-      facet_wrap(conta~., scales = "free_y")+
+      graph_2 +
+      facet_wrap(str_to_title(conta)~., scales = "free_y")+
       expand_limits(y=0)
     
   } else{
     graph_2<<-
-      graph_2+ facet_wrap(conta~.)
+      graph_2+ facet_wrap(str_to_title(conta)~.)
     
   }
   
@@ -471,7 +412,7 @@ output$download_serie_3<- downloadHandler(
     paste('dados_serie_temporal',  '.csv', sep='')
   },
   content = function(file) {
-
+    
     dados_serie_temporal <- graph_3$data
     write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
   }
@@ -505,36 +446,36 @@ renderPlotly({
     ungroup() %>%
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color= str_wrap(orgao,10), text= paste(conta, orgao, sep = "-" )))+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= pretty_breaks())+
+    geom_point(aes(x=ano, y=despesa, color=str_wrap(orgao,10), text= paste(conta, orgao, sep = "-" ) ), size=1)+
+    #scale_color_discrete_qualitative(palette = "Pastel 1")+
+    scale_color_manual(values= pal_manual())+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#15202B"),
+      panel.background = element_rect(fill = "#575756"), # "#121212" ##808080 #000080 #575756
       panel.grid = element_blank(),
-      axis.title.x = element_blank(),
+      axis.title = element_blank(),
       legend.position = "right",
-      strip.background = element_rect(fill = "#505050"),
-      strip.text = element_text(color = "white",size = 8)
+      strip.background = element_rect(fill = "white"), ##505050
+      strip.text = element_text(color = "black",size = 7)
     )+
     labs(
-      x="ano",
-      y= "Despesa",
       color = "conta"
     ) 
   
   if (input$freeScale_orgao){
     graph_3<<-
-      graph+ 
+      graph_3+ 
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
-      facet_wrap(conta~., scales = "free_y")+
+      facet_wrap(str_to_title(conta)~., scales = "free_y")+
       expand_limits(y=0)
     
   } else{
     graph_3<<-
-      graph_3+ facet_wrap(conta~.)
+      graph_3+ facet_wrap(str_to_title(conta)~.)
     
   }
   
@@ -574,7 +515,7 @@ output$download_serie_4<- downloadHandler(
     paste('dados_serie_temporal',  '.csv', sep='')
   },
   content = function(file) {
-
+    
     dados_serie_temporal <- graph_4$data
     write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
   }
@@ -608,35 +549,37 @@ renderPlotly({
     ungroup() %>%
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color=str_wrap(programa,10), text= paste(conta, programa, sep = "-")))+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= pretty_breaks())+
+    geom_point(aes(x=ano, y=despesa, color=str_wrap(programa,10), text= paste(conta, programa, sep = "-") ), size=1)+
+    #scale_color_discrete_qualitative(palette = "Pastel 1")+
+    scale_color_manual(values= pal_manual())+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#15202B"),
+      panel.background = element_rect(fill = "#575756"), # "#121212" ##808080 #000080 #575756
       panel.grid = element_blank(),
-      axis.title.x = element_blank(),
-      legend.position = "bottom",
-      strip.background = element_rect(fill = "#505050"),
-      strip.text = element_text(color = "white")
+      axis.title = element_blank(),
+      legend.position = "right",
+      strip.background = element_rect(fill = "white"), ##505050
+      strip.text = element_text(color = "black",size = 7)
     )+
     labs(
       color = "conta"
     ) 
   
-
+  
   if (input$freeScale_pt){
     graph_4<<-
       graph_4+ 
       theme(
         strip.text = element_text(color = "white",size = 7)
       ) +
-      facet_wrap(conta~., scales = "free_y")+
+      facet_wrap(str_to_title(conta)~., scales = "free_y")+
       expand_limits(y=0)
     
   } else{
     graph_4<-
-      graph_4+ facet_wrap(conta~.)
+      graph_4+ facet_wrap(str_to_title(conta)~.)
     
   }
   
@@ -676,7 +619,7 @@ output$download_serie_5<- downloadHandler(
     paste('dados_serie_temporal',  '.csv', sep='')
   },
   content = function(file) {
-
+    
     dados_serie_temporal <- graph_5$data
     write.table(dados_serie_temporal, file, sep = ",",row.names = FALSE,fileEncoding = "UTF-8",dec=".")
   }
@@ -711,17 +654,19 @@ renderPlotly({
     ungroup() %>%
     ggplot() +
     geom_line(aes(x=ano, y=despesa, color=str_wrap(acao,10), text = paste(conta, acao, sep="-")))+
-    scale_color_discrete_qualitative(palette = "Dark 3")+
-    scale_x_continuous(breaks= pretty_breaks())+
+    geom_point(aes(x=ano, y=despesa, color=str_wrap(acao,10), text= paste(conta, acao, sep="-") ), size=1)+
+    #scale_color_discrete_qualitative(palette = "Pastel 1")+
+    scale_color_manual(values= pal_manual())+
+    scale_x_continuous(breaks= seq(input$periodo[1],input$periodo[2],by=1))+
     theme_light() +
     theme(
       axis.text.x = element_text(angle = 90),
-      panel.background = element_rect(fill = "#15202B"),
+      panel.background = element_rect(fill = "#575756"), # "#121212" ##808080 #000080 #575756
       panel.grid = element_blank(),
-      axis.title.x = element_blank(),
+      axis.title = element_blank(),
       legend.position = "right",
-      strip.background = element_rect(fill = "#505050"),
-      strip.text = element_text(color = "white")
+      strip.background = element_rect(fill = "white"), ##505050
+      strip.text = element_text(color = "black",size = 7)
     )+
     labs(
       color = "conta"
@@ -730,12 +675,12 @@ renderPlotly({
   if (input$freeScale_acao){
     graph_5<<-
       graph_5+ 
-      facet_wrap(conta~., scales = "free_y")+
+      facet_wrap(str_to_title(conta)~., scales = "free_y")+
       expand_limits(y=0)
     
   } else{
     graph_5<<-
-      graph_5+ facet_wrap(conta~.)
+      graph_5+ facet_wrap(str_to_title(conta)~.)
     
   }
   
