@@ -278,8 +278,6 @@ renderPlotly({
 
 ```
 
-
-
 # Função por Conta
 
 ## Inputs {.sidebar data-width="150"}
@@ -362,7 +360,7 @@ renderPlotly({
     labs(
       x="ano",
       y= "Despesa",
-      color = "função"
+      color = "Função"
     ) 
   
   if (input$freeScale_funcao){
@@ -422,7 +420,7 @@ output$download_serie_3<- downloadHandler(
 
 ## Column {data-width = 400}
 
-### Evolução anual para todas contas de acordo com um órgão selecionado (valores em R$mi)
+### Evolução anual para todas contas de acordo com um órgão selecionado (valores em R\$mi)
 
 ```{r}
 
@@ -461,7 +459,7 @@ renderPlotly({
       strip.text = element_text(color = "black",size = 7)
     )+
     labs(
-      color = "conta"
+      color = "Órgão"
     ) 
   
   if (input$freeScale_orgao){
@@ -525,7 +523,7 @@ output$download_serie_4<- downloadHandler(
 
 ## Column {data-width = 400}
 
-### Evolução anual para todas contas de acordo com um programa de trabalho selecionado (valores em R$mi)
+### Evolução anual para todas contas de acordo com um programa de trabalho selecionado (valores em R\$mi)
 
 ```{r}
 
@@ -564,7 +562,7 @@ renderPlotly({
       strip.text = element_text(color = "black",size = 7)
     )+
     labs(
-      color = "conta"
+      color = "Programa"
     ) 
   
   
@@ -629,7 +627,7 @@ output$download_serie_5<- downloadHandler(
 
 ## Column {data-width = 400}
 
-### Evolução anual para todas contas de acordo com um programa de trabalho selecionado (valores em R\$mi)
+### Evolução anual para todas contas de acordo com uma ação orçamentária selecionada (valores em R\$mi)
 
 ```{r}
 
@@ -669,7 +667,7 @@ renderPlotly({
       strip.text = element_text(color = "black",size = 7)
     )+
     labs(
-      color = "conta"
+      color = "Ação orçamentária"
     ) 
   
   if (input$freeScale_acao){
