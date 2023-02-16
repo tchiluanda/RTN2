@@ -170,6 +170,25 @@ rtn_despesas<-
 
 ```
 
+# Sobre o painel
+
+
+```{r}
+
+renderUI({
+  
+   tags$iframe(src = "https://tchiluanda.github.io/RTN2/", height="100%", width="100%")
+  
+
+})
+
+
+
+```
+
+
+
+
 # Conta por função
 
 ## Inputs {.sidebar data-width="150"}
