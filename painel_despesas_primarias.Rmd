@@ -65,9 +65,13 @@ trazDadosAtualizados<- function(){
   #O primeiro dataset é sempre o do último ano
   
   #Checa se é necessário atualizar o modelo dimensional
-  data_ultima_atualizacao<-url_despesa_ult_mes<-datasets[["results"]][[1]][["last_modified"]]
+  #data_ultima_atualizacao<datasets[["results"]][[1]][["last_modified"]]
   
-  lubridate::as_date(data_ultima_atualizacao)
+  if (is.null(datasets[["results"]][[1]][["last_modified"]] )){
+    data_ultima_atualizacao<- datasets[["results"]][[1]][["created"]]
+  } else{
+    data_ultima_atualizacao<datasets[["results"]][[1]][["last_modified"]]
+  }
   
   
   load("data_ultimo_rds.RData")
